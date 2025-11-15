@@ -30,6 +30,14 @@ public class JwtFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+        // Excluir las rutas de autenticación
+        String path = request.getRequestURI();
+        if (path.startsWith("/api/auth/consuluser/") ||
+                path.startsWith("/api/v1/auth/consuluser/") ||
+                path.equals("/api/auth/updateuserinfo")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         // 1. validar que el header Authorization valido
         String authorizationHeader = request.getHeader("Authorization");

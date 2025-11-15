@@ -1,6 +1,8 @@
 package com.arka.MSAuthentication.infrastructure.controller;
 
 import com.arka.MSAuthentication.application.dto.LoginDto;
+import com.arka.MSAuthentication.application.dto.ConsultUserDto;
+import com.arka.MSAuthentication.application.dto.UpdateInfoUserDto;
 import com.arka.MSAuthentication.application.dto.UserCreateDto;
 import com.arka.MSAuthentication.application.mapper.UserMapper;
 import com.arka.MSAuthentication.domain.model.User;
@@ -17,10 +19,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -51,10 +50,10 @@ public class AuthController {
     }
 
     @PostMapping("/createadmin")
-    @PreAuthorize("hasAuthority('usuarios:crear_admin')") // Solo si tiene este permiso
+    @PreAuthorize("hasAuthority('CreateAdmin')") // Solo si tiene este permiso
     public ResponseEntity<UserCreateDto> createadmin(@RequestBody UserCreateDto userCreateDto){
         User user = userMapper.toUser(userCreateDto);            // DTO → Dominio
-        User newAdmin = createUserUseCase.create(user, "ADMIN"); // Lógica de negocio
+        User newAdmin = createUserUseCase.create(user, "Admin"); // Lógica de negocio
         UserCreateDto response = userMapper.toDto(newAdmin);     // Dominio → DTO
         return ResponseEntity.ok(response);
     }
@@ -62,7 +61,7 @@ public class AuthController {
     @PostMapping("/createclient")
     public ResponseEntity<UserCreateDto> createclient(@RequestBody UserCreateDto userCreateDto){
         User user = userMapper.toUser(userCreateDto);            // DTO → Dominio
-        User newClient = createUserUseCase.create(user, "USER"); // Lógica de negocio
+        User newClient = createUserUseCase.create(user, "Customer"); // Lógica de negocio
         UserCreateDto response = userMapper.toDto(newClient);     // Dominio → DTO
         return ResponseEntity.ok(response);
     }
@@ -99,21 +98,19 @@ public class AuthController {
 
         if(refreshTokenService.isRefreshTokenValidExpired(oldRefreshTokenEntity)) {
             // Si expira, lo revocamos y obligamos al usuario a loguearse de nuevo
-            refreshTokenService.deleteRefreshToken(userEmail); // Usamos el email para la revocación
+            refreshTokenService.deleteRefreshToken(userEmail);
             throw new RuntimeException("Refresh token expirado. Por favor, inicie sesión de nuevo.");
         }
 
         // --- Inicio de la Rotación ---
 
         // 2. ROTACIÓN: Revocar el Refresh Token Antiguo
-        // Esto garantiza que el token usado sea de un solo uso
-        refreshTokenService.deleteRefreshToken(userEmail); // Asume una política de 1 RT por usuario
+        refreshTokenService.deleteRefreshToken(userEmail);
 
-        // 3. ROTACIÓN: Crear un Nuevo Refresh Token (Nuevo UUID)
+        // 3. ROTACIÓN: Crear un Nuevo Refresh Token
         RefreshTokenEntity newRefreshToken = refreshTokenService.createRefreshToken(userEmail);
 
-        // 4. Generar el Nuevo Access Token (JWT)
-        // Cargamos los detalles para recrear la autenticación (necesario para JwtUtil.generateToken)
+        // 4. Generar el Nuevo Access Token
         UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
         Authentication newAuthentication = new UsernamePasswordAuthenticationToken(
                 userEmail, null, userDetails.getAuthorities()
@@ -130,26 +127,28 @@ public class AuthController {
         );
     }
 
+    @GetMapping("/consuluser/{id}")
+    public ResponseEntity<Object> getConsultUserDto(@PathVariable Long id) {
+        try {
+            ConsultUserDto consultUserDto = createUserUseCase.getConsultUser(id);
+            return ResponseEntity.ok(consultUserDto);
+        }
+        catch (Exception e){
+            return ResponseEntity.status(500).body("Error interno..." + e.getMessage());
+        }
+    }
+
+    @PutMapping("/updateuserinfo")
+        public ResponseEntity<Object> updateInfoUser(@RequestHeader("X-Auth-User-Id") Long userId,
+                                                 @RequestBody UpdateInfoUserDto updateInfoUserDto){
+        try {
+            User user = createUserUseCase.updateInfoUser(userId, updateInfoUserDto);
+            return ResponseEntity.ok(user);
+        }
+        catch (Exception e){
+            return ResponseEntity.status(500).body("Error interno..." + e.getMessage());
+        }
+    }
     record DtoRefreshToken(String refreshToken) {}
 }
 
-//  @PostMapping("/refresh")
-//    public Map<String,String> refreshToken(@RequestBody DtoRefreshToken request) {
-//        RefreshTokenEntity refreshTokenEntity = refreshTokenService.findByToken(request.refreshToken)
-//                .orElseThrow(()-> new RuntimeException("Refresh token not valid"));
-//
-//        if(refreshTokenService.isRefreshTokenValidExpired(refreshTokenEntity)) {
-//            refreshTokenService.deleteRefreshToken(refreshTokenEntity.getUserEntity().getName());
-//            throw new RuntimeException("Refresh token expired");
-//        }
-//
-//        UserDetails userDetails = userDetailsService.loadUserByUsername(
-//                refreshTokenEntity.getUserEntity().getEmail()
-//        );
-//
-//
-//        String jwt = jwtUtil.generateToken(new
-//                UsernamePasswordAuthenticationToken(refreshTokenEntity.getUserEntity().getEmail(), null, userDetails.getAuthorities()));
-//
-//        return Map.of("accessToken", jwt);
-//    }

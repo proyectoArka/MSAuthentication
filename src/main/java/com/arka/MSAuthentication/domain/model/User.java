@@ -18,4 +18,5 @@ public class User {
     private Boolean isDeleted = false;
     private String direction;
     private String phone;
+
 }

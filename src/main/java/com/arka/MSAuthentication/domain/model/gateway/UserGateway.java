@@ -14,5 +14,8 @@ public interface UserGateway {
 //    boolean existsByUsername(String username);
 //    boolean existsByEmail(String email);
 
+    User BuscarUser(Long id);
+
+
 
 }

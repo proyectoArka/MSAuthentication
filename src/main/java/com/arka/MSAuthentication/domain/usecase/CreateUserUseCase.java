@@ -1,5 +1,7 @@
 package com.arka.MSAuthentication.domain.usecase;
 
+import com.arka.MSAuthentication.application.dto.ConsultUserDto;
+import com.arka.MSAuthentication.application.dto.UpdateInfoUserDto;
 import com.arka.MSAuthentication.domain.model.Exception.Exception;
 import com.arka.MSAuthentication.domain.model.User;
 import com.arka.MSAuthentication.domain.model.gateway.UserGateway;
@@ -61,5 +63,48 @@ public class CreateUserUseCase {
 
     public Long idUSer(String email){
         return userGateway.idUser(email);
+    }
+
+    public ConsultUserDto getConsultUser(Long id){
+         User user = userGateway.BuscarUser(id);
+         ConsultUserDto dto = new ConsultUserDto();
+            dto.setName(user.getName());
+            dto.setEmail(user.getEmail());
+            dto.setDireccion(user.getDirection());
+            dto.setTelefono(user.getPhone());
+         return dto;
+    }
+
+
+    public User updateInfoUser(Long id, UpdateInfoUserDto updateInfoUserDto){
+        User user = userGateway.BuscarUser(id);
+        User userUpdate = user;
+
+        if(updateInfoUserDto.getNombre() != null && !updateInfoUserDto.getNombre().isEmpty()){
+            userUpdate.setName(updateInfoUserDto.getNombre());
+        }
+        if(updateInfoUserDto.getDireccion() != null && !updateInfoUserDto.getDireccion().isEmpty()){
+            userUpdate.setDirection(updateInfoUserDto.getDireccion());
+        }
+        if(updateInfoUserDto.getTelefono() != null && !updateInfoUserDto.getTelefono().isEmpty()){
+            userUpdate.setPhone(updateInfoUserDto.getTelefono());
+        }
+        if(updateInfoUserDto.getPassword() != null && !updateInfoUserDto.getPassword().isEmpty()){
+            if(updateInfoUserDto.getPassword().length() < 6){
+                throw new Exception("La contraseña debe tener al menos 6 caracteres.");
+            }
+            String hashedPassword = passwordEncoder.encode(updateInfoUserDto.getPassword());
+            userUpdate.setPassword(hashedPassword);
+        }
+        if(updateInfoUserDto.getEmail() != null && !updateInfoUserDto.getEmail().isEmpty()){
+            if(!updateInfoUserDto.getEmail().equals(user.getEmail()) && userGateway.existsByEmail(updateInfoUserDto.getEmail())){
+                throw new Exception("El email ya está registrado.");
+            }
+            userUpdate.setEmail(updateInfoUserDto.getEmail());
+        }
+
+        User updatedUser = userGateway.SaveUser(userUpdate);
+
+        return updatedUser;
     }
 }

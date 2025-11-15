@@ -9,6 +9,8 @@ public interface UserRepository extends CrudRepository<UserEntity, Long> {
     Optional<UserEntity> findByEmail(String email);
     boolean existsByEmail(String email);
     UserEntity save(UserEntity userEntity);
+    // sql = "SELECT * FROM users WHERE id = ?"
+    Optional<UserEntity> findById(Long id);
     //Optional<UserEntity> findByEmail(String username);
 
 

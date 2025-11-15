@@ -6,6 +6,8 @@ import com.arka.MSAuthentication.infrastructure.adapters.entity.RoleEntity;
 import com.arka.MSAuthentication.infrastructure.adapters.entity.UserEntity;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+
 @Repository
 public class UserGatewayImpl implements UserGateway {
 
@@ -19,23 +21,36 @@ public class UserGatewayImpl implements UserGateway {
 
     @Override
     public User SaveUser(User user) {
-        // 1. Buscar el rol y manejar el Optional
+        // 1. Buscar el rol (esta lógica es correcta)
         RoleEntity roleEntity = roleRepository.findByNameRole(user.getRole())
                 .orElseThrow(() -> new RuntimeException("El rol '" + user.getRole() + "' no existe"));
-        // 2. Mapear Domain User → UserEntity
-        UserEntity userEntity = new UserEntity();
-            userEntity.setName(user.getName());
-            userEntity.setEmail(user.getEmail());
-            userEntity.setPassword(user.getPassword());
-            userEntity.setDirection(user.getDirection());
-            userEntity.setPhone(user.getPhone());
-            userEntity.setIsDeleted(false);
-            userEntity.setRole(roleEntity);
 
-        // 3. Guardar en la base de datos
+        UserEntity userEntity;
+
+        if (user.getId() != null) {
+            // ******* 🔑 CASO 1: ACTUALIZACIÓN *******
+            // 2. Fetch la entidad existente para preservar el 'createdAt'
+            userEntity = UserRepository.findById(user.getId())
+                    .orElseThrow(() -> new RuntimeException("User not found for update: " + user.getId()));
+        } else {
+            // ******* 🔑 CASO 2: INSERCIÓN NUEVA *******
+            // 2. Crear una nueva entidad
+            userEntity = new UserEntity();
+        }
+
+        // 4. Mapear/Actualizar todos los campos mutables
+        userEntity.setName(user.getName());
+        userEntity.setEmail(user.getEmail());
+        userEntity.setPassword(user.getPassword());
+        userEntity.setDirection(user.getDirection());
+        userEntity.setPhone(user.getPhone());
+        userEntity.setIsDeleted(user.getIsDeleted());
+        userEntity.setRole(roleEntity);
+
+        // 5. Guardar (JPA sabe que es UPDATE porque el objeto ya tiene ID)
         UserEntity savedEntity = UserRepository.save(userEntity);
 
-        // 4. Mapear UserEntity → Domain User y retornar
+        // 6. Mapear de vuelta
         user.setId(savedEntity.getId());
         return user;
     }
@@ -50,5 +65,22 @@ public class UserGatewayImpl implements UserGateway {
         UserEntity userEntity = UserRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
         return userEntity.getId();
+    }
+
+    @Override
+    public User BuscarUser(Long id) {
+        UserEntity userEntity = UserRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+
+        User user = new User();
+            user.setRole(userEntity.getRole().getNameRole());
+            user.setId(userEntity.getId());
+            user.setName(userEntity.getName());
+            user.setEmail(userEntity.getEmail());
+            user.setDirection(userEntity.getDirection());
+            user.setPhone(userEntity.getPhone());
+            user.setIsDeleted(userEntity.getIsDeleted());
+            user.setPassword(userEntity.getPassword());
+        return user;
     }
 }

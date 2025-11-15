@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
 
 import java.time.LocalDateTime;
 
@@ -18,6 +19,16 @@ public class UserEntity {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "users_seq")
     @SequenceGenerator(name = "users_seq", sequenceName = "users_id_seq", allocationSize = 1)
     private Long id;
+
+    /*
+    * CREATE SEQUENCE users_id_seq
+    INCREMENT BY 1
+    START WITH 1
+    NO CYCLE;
+    *
+    * CREATE SEQUENCE users_id_seq
+    START WITH 1
+    INCREMENT BY 1;*/
 
     @Column(nullable = false, length = 50)
     private String name;
@@ -37,6 +48,7 @@ public class UserEntity {
     @Column(nullable = false)
     private String phone;
 
+    @CreatedDate
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
