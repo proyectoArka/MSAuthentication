@@ -4,6 +4,7 @@ import com.arka.MSAuthentication.application.dto.LoginDto;
 import com.arka.MSAuthentication.application.dto.ConsultUserDto;
 import com.arka.MSAuthentication.application.dto.UpdateInfoUserDto;
 import com.arka.MSAuthentication.application.dto.UserCreateDto;
+import com.arka.MSAuthentication.application.dto.UserViewDto;
 import com.arka.MSAuthentication.application.mapper.UserMapper;
 import com.arka.MSAuthentication.domain.model.User;
 import com.arka.MSAuthentication.domain.usecase.CreateUserUseCase;
@@ -11,6 +12,14 @@ import com.arka.MSAuthentication.infrastructure.adapters.entity.RefreshTokenEnti
 import com.arka.MSAuthentication.infrastructure.adapters.entity.UserEntity;
 import com.arka.MSAuthentication.infrastructure.config.JwtUtil;
 import com.arka.MSAuthentication.infrastructure.config.RefreshToken.RefreshTokenService;
+import com.arka.MSAuthentication.infrastructure.Exception.TokenRefreshException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,6 +32,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+@Tag(name = "Autenticación", description = "Endpoints para autenticación y gestión de usuarios")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -49,26 +59,44 @@ public class AuthController {
         this.userDetailsService = userDetailsService;
     }
 
+    @Operation(summary = "Crear administrador", description = "Crea un usuario con rol Admin", security = @SecurityRequirement(name = "bearer-jwt"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Administrador creado correctamente"),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos"),
+            @ApiResponse(responseCode = "409", description = "Email ya registrado")
+    })
     @PostMapping("/createadmin")
     @PreAuthorize("hasAuthority('CreateAdmin')") // Solo si tiene este permiso
-    public ResponseEntity<UserCreateDto> createadmin(@RequestBody UserCreateDto userCreateDto){
+    public ResponseEntity<UserViewDto> createadmin(@Valid @RequestBody UserCreateDto userCreateDto){
         User user = userMapper.toUser(userCreateDto);            // DTO → Dominio
         User newAdmin = createUserUseCase.create(user, "Admin"); // Lógica de negocio
-        UserCreateDto response = userMapper.toDto(newAdmin);     // Dominio → DTO
+        UserViewDto response = userMapper.toViewDto(newAdmin);     // Dominio → DTO
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "Crear cliente", description = "Crea un usuario con rol Customer")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Cliente creado correctamente"),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos"),
+            @ApiResponse(responseCode = "409", description = "Email ya registrado")
+    })
     @PostMapping("/createclient")
-    public ResponseEntity<UserCreateDto> createclient(@RequestBody UserCreateDto userCreateDto){
+    public ResponseEntity<UserViewDto> createclient(@Valid @RequestBody UserCreateDto userCreateDto){
         User user = userMapper.toUser(userCreateDto);            // DTO → Dominio
         User newClient = createUserUseCase.create(user, "Customer"); // Lógica de negocio
-        UserCreateDto response = userMapper.toDto(newClient);     // Dominio → DTO
+        UserViewDto response = userMapper.toViewDto(newClient);     // Dominio → DTO
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "Login", description = "Autentica credenciales y retorna tokens JWT y refresh")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Login exitoso"),
+            @ApiResponse(responseCode = "401", description = "Credenciales inválidas"),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos")
+    })
     @PostMapping("/login")
     //ResponseEntity<Void>
-    public Map<String,String> login(@RequestBody LoginDto loginDto) {
+    public Map<String,String> login(@Valid @RequestBody LoginDto loginDto) {
         UsernamePasswordAuthenticationToken login = new UsernamePasswordAuthenticationToken(
                 loginDto.getEmail(),
                 loginDto.getPassword()
@@ -85,12 +113,17 @@ public class AuthController {
         );
     }
 
+    @Operation(summary = "Refrescar token", description = "Intercambia refresh token válido por nuevo par de tokens", security = @SecurityRequirement(name = "bearer-jwt"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Tokens emitidos"),
+            @ApiResponse(responseCode = "401", description = "Refresh token inválido o expirado")
+    })
     @PostMapping("/refresh")
-    public Map<String,String> refreshToken(@RequestBody DtoRefreshToken request) {
+    public Map<String,String> refreshToken(@Valid @RequestBody DtoRefreshToken request) {
 
         // 1. Encontrar y Validar el Refresh Token Antiguo
         RefreshTokenEntity oldRefreshTokenEntity = refreshTokenService.findByToken(request.refreshToken)
-                .orElseThrow(()-> new RuntimeException("Refresh token no válido"));
+                .orElseThrow(()-> new TokenRefreshException(request.refreshToken, "Token no encontrado"));
 
         // Obtener el UserEntity asociado antes de la posible expiración
         UserEntity userEntity = oldRefreshTokenEntity.getUserEntity();
@@ -99,7 +132,7 @@ public class AuthController {
         if(refreshTokenService.isRefreshTokenValidExpired(oldRefreshTokenEntity)) {
             // Si expira, lo revocamos y obligamos al usuario a loguearse de nuevo
             refreshTokenService.deleteRefreshToken(userEmail);
-            throw new RuntimeException("Refresh token expirado. Por favor, inicie sesión de nuevo.");
+            throw new TokenRefreshException(request.refreshToken, "Token expirado. Por favor, inicie sesión de nuevo");
         }
 
         // --- Inicio de la Rotación ---
@@ -127,28 +160,30 @@ public class AuthController {
         );
     }
 
+    @Operation(summary = "Consultar usuario", description = "Obtiene datos básicos del usuario por ID", security = @SecurityRequirement(name = "bearer-jwt"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Usuario encontrado"),
+            @ApiResponse(responseCode = "404", description = "Usuario no existe")
+    })
     @GetMapping("/consuluser/{id}")
-    public ResponseEntity<Object> getConsultUserDto(@PathVariable Long id) {
-        try {
-            ConsultUserDto consultUserDto = createUserUseCase.getConsultUser(id);
-            return ResponseEntity.ok(consultUserDto);
-        }
-        catch (Exception e){
-            return ResponseEntity.status(500).body("Error interno..." + e.getMessage());
-        }
+    public ResponseEntity<ConsultUserDto> getConsultUserDto(@PathVariable Long id) {
+        ConsultUserDto consultUserDto = createUserUseCase.getConsultUser(id);
+        return ResponseEntity.ok(consultUserDto);
     }
 
+    @Operation(summary = "Actualizar información del usuario", description = "Actualiza campos modificables", security = @SecurityRequirement(name = "bearer-jwt"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Usuario actualizado"),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos"),
+            @ApiResponse(responseCode = "409", description = "Email ya registrado"),
+            @ApiResponse(responseCode = "404", description = "Usuario no existe")
+    })
     @PutMapping("/updateuserinfo")
-        public ResponseEntity<Object> updateInfoUser(@RequestHeader("X-Auth-User-Id") Long userId,
-                                                 @RequestBody UpdateInfoUserDto updateInfoUserDto){
-        try {
-            User user = createUserUseCase.updateInfoUser(userId, updateInfoUserDto);
-            return ResponseEntity.ok(user);
-        }
-        catch (Exception e){
-            return ResponseEntity.status(500).body("Error interno..." + e.getMessage());
-        }
+    public ResponseEntity<UserViewDto> updateInfoUser(@RequestHeader("X-Auth-User-Id") Long userId,
+                                                @Valid @RequestBody UpdateInfoUserDto updateInfoUserDto){
+        User user = createUserUseCase.updateInfoUser(userId, updateInfoUserDto);
+        UserViewDto response = userMapper.toViewDto(user);
+        return ResponseEntity.ok(response);
     }
-    record DtoRefreshToken(String refreshToken) {}
+    public record DtoRefreshToken(@NotBlank(message = "El refreshToken no puede estar vacío") String refreshToken) {}
 }
-

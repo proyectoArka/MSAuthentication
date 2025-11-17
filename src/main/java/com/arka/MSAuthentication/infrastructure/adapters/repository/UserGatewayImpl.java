@@ -1,12 +1,13 @@
 package com.arka.MSAuthentication.infrastructure.adapters.repository;
 
+import com.arka.MSAuthentication.domain.model.Exception.BusinessRuleException;
+import com.arka.MSAuthentication.domain.model.Exception.ResourceNotFoundException;
 import com.arka.MSAuthentication.domain.model.User;
 import com.arka.MSAuthentication.domain.model.gateway.UserGateway;
 import com.arka.MSAuthentication.infrastructure.adapters.entity.RoleEntity;
 import com.arka.MSAuthentication.infrastructure.adapters.entity.UserEntity;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
 
 @Repository
 public class UserGatewayImpl implements UserGateway {
@@ -23,7 +24,7 @@ public class UserGatewayImpl implements UserGateway {
     public User SaveUser(User user) {
         // 1. Buscar el rol (esta lógica es correcta)
         RoleEntity roleEntity = roleRepository.findByNameRole(user.getRole())
-                .orElseThrow(() -> new RuntimeException("El rol '" + user.getRole() + "' no existe"));
+                .orElseThrow(() -> new BusinessRuleException("El rol '" + user.getRole() + "' no existe"));
 
         UserEntity userEntity;
 
@@ -31,7 +32,7 @@ public class UserGatewayImpl implements UserGateway {
             // ******* 🔑 CASO 1: ACTUALIZACIÓN *******
             // 2. Fetch la entidad existente para preservar el 'createdAt'
             userEntity = UserRepository.findById(user.getId())
-                    .orElseThrow(() -> new RuntimeException("User not found for update: " + user.getId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Usuario", user.getId()));
         } else {
             // ******* 🔑 CASO 2: INSERCIÓN NUEVA *******
             // 2. Crear una nueva entidad
@@ -63,14 +64,14 @@ public class UserGatewayImpl implements UserGateway {
     @Override
     public long idUser(String email) {
         UserEntity userEntity = UserRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario con email: " + email + " no encontrado"));
         return userEntity.getId();
     }
 
     @Override
     public User BuscarUser(Long id) {
         UserEntity userEntity = UserRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", id));
 
         User user = new User();
             user.setRole(userEntity.getRole().getNameRole());

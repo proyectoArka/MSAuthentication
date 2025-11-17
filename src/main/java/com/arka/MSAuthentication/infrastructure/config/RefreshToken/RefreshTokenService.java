@@ -30,7 +30,7 @@ public class RefreshTokenService {
 
     public RefreshTokenEntity createRefreshToken(String email) {
         UserEntity userEntity = userRepository.findByEmail(email)
-                .orElseThrow(()-> new RuntimeException("User not found: " + email));
+                .orElseThrow(() -> new com.arka.MSAuthentication.domain.model.Exception.ResourceNotFoundException("Usuario con email: " + email + " no encontrado"));
 
         RefreshTokenEntity refreshToken = new RefreshTokenEntity();
             refreshToken.setUserEntity(userEntity);
@@ -50,7 +50,7 @@ public class RefreshTokenService {
     @Transactional
     public void deleteRefreshToken(String email) {
         UserEntity userEntity = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + email));
+                .orElseThrow(() -> new com.arka.MSAuthentication.domain.model.Exception.ResourceNotFoundException("Usuario con email: " + email + " no encontrado"));
         refreshTokenRepository.deleteByUserEntity(userEntity);
     }
 }
